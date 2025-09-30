@@ -1,0 +1,11 @@
+# Core ML & Simulation
+torch
+torchvision
+gymnasium
+miniworld
+
+# Data Handling & Utilities
+numpy
+opencv-python
+Pillow
+tqdm
