@@ -1,322 +1,135 @@
-# Lightweight Contrastive Pretraining for Goal-Conditioned Visual RL
+🤖 Lightweight Contrastive Pretraining for Visual RL
+A resource-efficient framework for training a goal-conditioned navigation agent in a 3D world.
+This project implements a powerful two-stage learning pipeline that first teaches an agent to understand its visual world through contrastive learning, and then uses that knowledge to efficiently learn how to act and navigate to a visual goal using Reinforcement Learning.
 
-A resource-efficient framework for goal-conditioned navigation in MiniWorld using contrastive pretraining and PPO.
+🎯 The Core Idea: See, Then Do
+Training an agent from pixels is notoriously data-hungry. This framework dramatically improves sample efficiency by decoupling visual representation learning from policy learning.
 
-## 🎯 Overview
+🧠 Stage 1: Learning to See (Contrastive Pretraining)
+The agent's "visual cortex"—a lightweight CNN Encoder—is first pre-trained on thousands of unlabeled images collected from random exploration. Using a SimCLR-style contrastive loss, it learns to generate similar numerical representations (embeddings) for different views of the same scene and different representations for distinct scenes. This teaches it a robust, viewpoint-invariant understanding of the world.
 
-This project implements a two-stage learning approach:
-1. **Contrastive Pretraining**: Train a compact CNN encoder using SimCLR-style contrastive learning on unlabeled frames
-2. **Goal-Conditioned RL**: Freeze the encoder and train a PPO policy for navigation using embedding similarity rewards
+🏆 Stage 2: Learning to Act (Reinforcement Learning)
+With the visual encoder now frozen, we train a PPO policy. The agent is given a goal image and its current view. Both are passed through the frozen encoder. The policy receives these two embeddings and learns to take actions that minimize the distance between them, guided by a simple reward function. Because the agent already understands images, it can learn to navigate much faster.
 
-## 🏗️ Architecture
-
-```
+🏗️ Architecture
 ┌─────────────────────────────────────────────────────────────┐
-│                    STAGE 1: PRETRAINING                      │
-│                                                               │
-│  Random Exploration → Unlabeled Frames → Contrastive Loss    │
-│                                              ↓                │
-│                                      Frozen Encoder           │
+│                 🧠 STAGE 1: PRETRAINING (Unsupervised)        │
+│                                                             │
+│  Random Exploration ──> Unlabeled Frames ──> Contrastive Loss │
+│                                                │              │
+│                                                ▼              │
+│                                        ✨ Frozen Encoder      │
 └─────────────────────────────────────────────────────────────┘
-                              ↓
+                                                 │
+                                                 ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                   STAGE 2: RL TRAINING                       │
-│                                                               │
-│  Current Obs → Encoder → Embedding ─┐                        │
-│                                     ├→ PPO Policy → Actions  │
-│  Goal Image  → Encoder → Embedding ─┘                        │
-│                                     ↓                         │
-│              Reward = Embedding Similarity                    │
+│                  🏆 STAGE 2: RL TRAINING (Goal-Conditioned)    │
+│                                                             │
+│  Current View ─> Encoder ─> Embedding ─┐                    │
+│                                         ├─> PPO Policy ──> Action
+│   Goal Image  ─> Encoder ─> Embedding ─┘                    │
+│                                         │                     │
+│                                         ▼                     │
+│                       Reward = Embedding Similarity           │
 └─────────────────────────────────────────────────────────────┘
-```
 
-## 📋 Features
+✅ Key Features
+Lightweight Design: Uses a compact CNN encoder (~1M parameters) that runs on modest hardware.
 
-- ✅ **Lightweight Design**: Compact CNN encoder (~1M parameters)
-- ✅ **Sample Efficient**: Contrastive pretraining reduces RL sample complexity
-- ✅ **Resource Friendly**: Runs on modest hardware (tested on single GPU)
-- ✅ **Modular Pipeline**: Easy to extend and experiment with
-- ✅ **Goal Generalization**: Learns viewpoint-invariant representations
-- ✅ **Complete Implementation**: From data collection to evaluation
+Sample Efficient: Drastically reduces the number of environment interactions needed for RL training.
 
-## 🚀 Quick Start
+Goal-Oriented: Learns to navigate to goals specified by images, not coordinates.
 
-### Installation
+Modular & Clear: The code is cleanly separated into data collection, pre-training, RL training, and evaluation.
 
-```bash
-# Clone the repository
+Complete Pipeline: Provides all the scripts needed to go from a blank slate to a fully trained and evaluated agent.
+
+🚀 Quick Start Guide
+1. Installation
+Clone the repository, create a virtual environment, and install the required dependencies.
+
+# Clone this repository
 git clone <your-repo-url>
-cd contrastive-visual-rl
+cd your-repo-folder
 
-# Create virtual environment
+# Create and activate a virtual environment
 python -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 
 # Install dependencies
 pip install -r requirements.txt
-```
 
-### Full Pipeline (Recommended)
+2. Running the Full Pipeline (Recommended)
+This is the easiest way to run the entire project. The following command will automatically:
 
-Run the complete pipeline end-to-end:
+Collect 100 episodes of random exploration data.
 
-```bash
-python main.py --mode full --num_episodes 100 --contrastive_epochs 50 --rl_episodes 1000
-```
+Pre-train the contrastive encoder for 50 epochs on that data.
 
-### Step-by-Step Execution
+Train the PPO agent for 1000 episodes using the frozen encoder.
 
-#### 1. Collect Exploration Data
+# This command runs the whole show!
+python main.py --mode full
 
-```bash
-python main.py --mode collect --num_episodes 100
-```
+(Note: You will need to create a main.py script that orchestrates the calls to the other scripts based on the --mode flag, or simply run the individual steps below.)
 
-This collects unlabeled frames from random exploration in MiniWorld.
+3. Step-by-Step Execution
+If you prefer to run each stage manually, follow these steps in order.
 
-#### 2. Pretrain Contrastive Encoder
+Step 1: Collect Exploration Data
+This populates the data/frames directory with images.
 
-```bash
-python main.py --mode pretrain --contrastive_epochs 50 --batch_size 64
-```
+python data_collection.py --num_episodes 100
 
-Trains the encoder with SimCLR-style contrastive learning.
+Step 2: Pre-train the Contrastive Encoder
+This trains the encoder on the collected frames and saves the model to models/encoder_final.pt.
 
-#### 3. Train PPO Policy
+python train_contrastive.py --contrastive_epochs 50
 
-```bash
-python main.py --mode train_rl --rl_episodes 1000 --max_steps 200
-```
+Step 3: Train the PPO Policy
+This uses the frozen encoder to train the navigation agent and saves the final policy to models/ppo/.
 
-Trains the goal-conditioned navigation policy using the frozen encoder.
+python train_ppo.py --rl_episodes 1000
 
-#### 4. Evaluate Policy
+🎬 Evaluating Your Agent
+Once your agent is trained, you can watch it in action!
 
-```bash
-python main.py --mode evaluate --eval_episodes 20 --save_video
-```
+To watch the agent navigate live:
+This command will open a window and render the agent's performance for 20 episodes.
 
-Evaluates the trained policy and saves videos.
+python evaluate.py --render
 
-## 📁 Project Structure
+To save a video of the agent's performance:
+This will create a videos/ directory and save an MP4 file of the evaluation run.
 
-```
-.
-├── main.py                      # Main pipeline script
-├── contrastive_encoder.py       # Encoder architecture & SimCLR loss
-├── data_collection.py           # Random exploration & dataset
-├── train_contrastive.py         # Contrastive pretraining script
-├── ppo_policy.py                # PPO policy & buffer implementation
-├── goal_env_wrapper.py          # Goal-conditioned environment wrapper
-├── train_ppo.py                 # PPO training loop
-├── evaluate.py                  # Evaluation & visualization tools
-├── requirements.txt             # Project dependencies
-├── README.md                    # This file
-├── data/                        # Collected frames (created automatically)
-├── models/                      # Saved models (created automatically)
-│   ├── encoder_final.pt
-│   └── ppo/
-│       └── policy_final.pt
-└── videos/                      # Evaluation videos (created automatically)
-```
+python evaluate.py --save_video
 
-## 🎮 Supported Environments
+After running, you will see a final performance summary in your terminal:
 
-The framework supports various MiniWorld environments:
-
-- `MiniWorld-Hallway-v0` (default)
-- `MiniWorld-OneRoom-v0`
-- `MiniWorld-TMaze-v0`
-- `MiniWorld-FourRooms-v0`
-
-Change environment with:
-```bash
-python main.py --mode full --env_name MiniWorld-FourRooms-v0
-```
-
-## ⚙️ Configuration Options
-
-### Data Collection
-- `--num_episodes`: Number of exploration episodes (default: 100)
-- `--frames_path`: Path to save/load frames
-
-### Contrastive Training
-- `--contrastive_epochs`: Training epochs (default: 50)
-- `--batch_size`: Batch size (default: 64)
-- `--contrastive_lr`: Learning rate (default: 3e-4)
-- `--embedding_dim`: Embedding dimension (default: 128)
-- `--temperature`: NT-Xent temperature (default: 0.5)
-
-### RL Training
-- `--rl_episodes`: Training episodes (default: 1000)
-- `--max_steps`: Max steps per episode (default: 200)
-- `--ppo_lr`: Learning rate (default: 3e-4)
-
-### Hardware
-- `--device`: Device selection (auto/cuda/cpu)
-
-## 📊 Expected Results
-
-After training, you should see:
-
-### Contrastive Pretraining
-- Training loss should decrease to ~0.5-1.0
-- Encoder learns viewpoint-invariant features
-- Similar views have high cosine similarity (>0.8)
-
-### RL Training
-- Success rate improves to 60-80% (environment-dependent)
-- Mean reward increases over episodes
-- Agent learns efficient goal-reaching behavior
-
-### Sample Output
-```
-EVALUATION SUMMARY
+--- EVALUATION SUMMARY ---
 ==================================================
 Episodes: 20
-Mean Reward: 15.34 ± 8.21
-Mean Length: 87.50 ± 35.12
-Success Rate: 75.0%
-Mean Final Distance: 0.087 ± 0.112
+Mean Reward: 0.70 ± 5.04
+Mean Length: 148.95 ± 93.42
+Success Rate: 20.0%
 ==================================================
-```
 
-## 🔬 Key Components Explained
+🛠️ Extending the Project
+This framework is a great starting point. Here are some ideas for extending it:
 
-### 1. Contrastive Encoder
-- **Architecture**: 4-layer CNN (32→64→128→256 channels)
-- **Output**: 128-dimensional normalized embeddings
-- **Training**: NT-Xent loss with data augmentation
-- **Augmentations**: Random crops, color jitter, grayscale, flips
+Try Harder Environments: Test how well the agent generalizes to MiniWorld-FourRooms-v0 or MiniWorld-TMaze-v0.
 
-### 2. PPO Policy
-- **Input**: Concatenated current and goal embeddings (256-dim)
-- **Architecture**: 2-layer MLP (256 hidden units)
-- **Outputs**: Action probabilities + value estimate
-- **Training**: Clipped surrogate objective with GAE
+Improve the Encoder: Replace the simple CNN with a more powerful architecture like a ResNet.
 
-### 3. Goal-Conditioned Rewards
-```python
-reward = previous_distance - current_distance  # Progress reward
-reward += 10.0 if distance < 0.1 else 0       # Goal bonus
-reward -= 0.01                                 # Time penalty
-```
+Experiment with RL Algorithms: Implement an off-policy algorithm like SAC and compare its sample efficiency to PPO.
 
-## 🎨 Visualization Tools
+Enhance the Reward Function: Add penalties for colliding with walls or rewards for facing the goal to guide learning.
 
-### View Learned Embeddings
-```python
-from evaluate import visualize_embeddings
-visualize_embeddings(encoder_path='models/encoder_final.pt')
-```
+📚 Acknowledgments
+This project is inspired by and builds upon the ideas presented in several foundational papers:
 
-### Test Viewpoint Invariance
-```python
-from evaluate import test_embedding_similarity
-test_embedding_similarity(encoder_path='models/encoder_final.pt')
-```
+A Simple Framework for Contrastive Learning of Visual Representations (SimCLR)
 
-### Watch Trained Agent
-```python
-from evaluate import evaluate_policy
-evaluate_policy(
-    policy_path='models/ppo/policy_final.pt',
-    save_video=True,
-    render=True
-)
-```
+Proximal Policy Optimization Algorithms (PPO)
 
-## 🛠️ Troubleshooting
-
-### Out of Memory
-- Reduce `--batch_size` to 32 or 16
-- Use CPU training: `--device cpu`
-- Collect fewer frames: `--num_episodes 50`
-
-### MiniWorld Installation Issues
-```bash
-# Install system dependencies (Ubuntu/Debian)
-sudo apt-get install python3-opengl freeglut3-dev
-
-# Or use conda
-conda install -c conda-forge pyglet
-```
-
-### Low Success Rate
-- Increase pretraining epochs: `--contrastive_epochs 100`
-- Collect more diverse data: `--num_episodes 200`
-- Adjust reward threshold in `goal_env_wrapper.py`
-- Try simpler environments: `--env_name MiniWorld-Hallway-v0`
-
-## 📈 Extending the Project
-
-### Add New Augmentations
-Edit `SimCLRAugmentation` in `contrastive_encoder.py`:
-```python
-self.transform = T.Compose([
-    T.ToPILImage(),
-    T.RandomResizedCrop(img_size, scale=(0.8, 1.0)),
-    T.RandomRotation(15),  # Add rotation
-    T.GaussianBlur(3),     # Add blur
-    # ... other augmentations
-])
-```
-
-### Try Different Encoders
-Modify `ContrastiveEncoder` architecture:
-```python
-# Use ResNet-style blocks
-# Add attention mechanisms
-# Experiment with different depths
-```
-
-### Custom Reward Functions
-Edit `GoalConditionedWrapper.step()` in `goal_env_wrapper.py`:
-```python
-# Example: Add orientation reward
-reward = distance_reward + orientation_bonus - time_penalty
-```
-
-## 📚 References
-
-- **CURL**: Contrastive Unsupervised Representations for Reinforcement Learning
-- **RIG**: Reinforcement Learning with Images as Goals
-- **SimCLR**: A Simple Framework for Contrastive Learning of Visual Representations
-- **PPO**: Proximal Policy Optimization Algorithms
-
-## 🤝 Contributing
-
-Contributions welcome! Areas for improvement:
-- Support for more MiniWorld environments
-- Additional contrastive learning methods (MoCo, BYOL)
-- Multi-goal navigation
-- Hierarchical policies
-- Real robot transfer experiments
-
-## 📝 Citation
-
-If you use this code in your research, please cite:
-
-```bibtex
-@article{hegde2025lightweight,
-  title={Lightweight Contrastive Pretraining for Goal-Conditioned Visual Reinforcement Learning in MiniWorld},
-  author={Hegde Kota, Adithya and Varma, P. Vasanth Kumar and Vikas, P.},
-  year={2025}
-}
-```
-
-## 📄 License
-
-MIT License - feel free to use this code for research and educational purposes.
-
-## 👥 Authors
-
-- Adithya Hegde Kota
-- P. Vasanth Kumar Varma
-- P. Vikas
-
-## 🙏 Acknowledgments
-
-- MiniWorld simulator team
-- PyTorch team
-- OpenAI Gym team
+CURL: Contrastive Unsupervised Representations for Reinforcement Learning
